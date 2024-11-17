@@ -4,15 +4,15 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Leaflet Esri Satellite Example</title>
-  
+
   <!-- Link to Bootstrap 5 CSS -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
-  
+
   <!-- Leaflet CSS -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <!-- Leaflet Locate Plugin CSS -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet.locatecontrol/dist/L.Control.Locate.min.css" />
-  
+
   <style>
     #map {
       height: 500px;
@@ -20,68 +20,53 @@
       border: 1px solid red;
       border-radius: 10px;
     }
-
     .buttons-container {
       margin-top: 20px;
-      width: 96%; /* Ensures buttons row stretches to full width */
-    }
-
-    .form-container {
-      margin-top: 30px;
-      width: 80%;
-    }
-
-    .form-container input,
-    .form-container textarea {
-      margin-bottom: 10px;
+      width: 96%;
     }
   </style>
 </head>
 <body>
-
-  <!-- Container for the map and buttons -->
+  <!-- Map Container -->
   <div class="container-fluid">
-
-    <!-- Map container -->
     <div id="map" class="mt-2"></div>
-
-    <!-- Button container -->
-    <div class="buttons-container ml-5">
+    <div class="buttons-container">
       <div class="row">
-        <button class="btn btn-primary col-3 col-md-1">Add</button>
-        <button class="btn btn-secondary col-3 col-md-1">Clear Point</button>
-        <button class="btn btn-success col-3 col-md-1">Send Location</button>
-        <button class="btn btn-danger col-3 col-md-1">Backup</button>
+        <button id="readBtn" class="btn btn-primary col-3 col-md-1">Read</button>
+        <button id="pinBtn" class="btn btn-secondary col-3 col-md-1">Pin</button>
+        <button id="clearBtn" class="btn btn-danger col-3 col-md-1">Clear</button>
+        <button id="sendBtn" class="btn btn-success col-3 col-md-1">Send</button>
       </div>
     </div>
+  </div>
 
-    <!-- Form Container -->
-    <div class="form-container">
-      <h4>Submit Your Details</h4>
-      <form>
-        <!-- Full Name -->
-        <div class="mb-3">
-          <label for="fullName" class="form-label">Full Name</label>
-          <input type="text" class="form-control" id="fullName" placeholder="Enter your full name" required>
+  <!-- Modal for the Form -->
+  <div class="modal fade" id="formModal" tabindex="-1" aria-labelledby="formModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="formModalLabel">Submit Your Details</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
         </div>
-
-        <!-- Phone Number -->
-        <div class="mb-3">
-          <label for="phoneNumber" class="form-label">Phone Number</label>
-          <input type="tel" class="form-control" id="phoneNumber" placeholder="Enter your phone number" required>
+        <div class="modal-body">
+          <form id="detailsForm">
+            <div class="mb-3">
+              <label for="fullName" class="form-label">Full Name</label>
+              <input type="text" class="form-control" id="fullName" placeholder="Enter your full name" required>
+            </div>
+            <div class="mb-3">
+              <label for="phoneNumber" class="form-label">Phone Number</label>
+              <input type="tel" class="form-control" id="phoneNumber" placeholder="Enter your phone number" required>
+            </div>
+            <div class="mb-3">
+              <label for="placeName" class="form-label">Place Name</label>
+              <input type="text" class="form-control" id="placeName" placeholder="Enter your place name" required>
+            </div>
+            <button type="submit" class="btn btn-primary">Submit</button>
+          </form>
         </div>
-
-        <!-- Place Name -->
-        <div class="mb-3">
-          <label for="placeName" class="form-label">Place Name</label>
-          <input type="text" class="form-control" id="placeName" placeholder="Enter your place name" required>
-        </div>
-
-        <!-- Submit Button -->
-        <button type="submit" class="btn btn-primary">Submit</button>
-      </form>
+      </div>
     </div>
-
   </div>
 
   <!-- Leaflet JS -->
@@ -89,12 +74,11 @@
   <!-- Leaflet Locate Plugin JS -->
   <script src="https://unpkg.com/leaflet.locatecontrol/dist/L.Control.Locate.min.js"></script>
   <!-- Bootstrap JS -->
-  <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.11.6/dist/umd/popper.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.min.js"></script>
 
   <script>
-    // Initialize the map
-    var map = L.map('map').setView([-6.8166595366727805, 39.29142699811245], 18);
+    let map = L.map('map').setView([-6.8166595366727805, 39.29142699811245], 18);
+    let markers = []; // Store markers for clearing later
 
     // Add Esri Satellite tile layer
     L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
@@ -103,15 +87,55 @@
 
     // Add Locate Control to the map
     L.control.locate({
-      position: 'bottomright', // Position of the widget on the map
-      drawCircle: true,    // Draw an accuracy circle around the user's location
-      follow: false,       // Automatically pan the map to follow the user
-      setView: true,       // Automatically set the map view to the user's location
-      flyTo: true,         // Smooth zoom to the user's location
-      locateOptions: {     // Geolocation options
-        enableHighAccuracy: true
-      }
+      position: 'bottomright', // Position of the widget
+      drawCircle: true,        // Draw accuracy circle
+      follow: false,           // Do not follow automatically
+      setView: true,           // Set map view to user's location
+      flyTo: true,             // Smooth zoom animation
+      locateOptions: { enableHighAccuracy: true }
     }).addTo(map);
+
+    // Handle Read Button
+    let currentLocation = null;
+    document.getElementById('readBtn').addEventListener('click', async () => {
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          (position) => {
+            currentLocation = {
+              lat: position.coords.latitude,
+              lng: position.coords.longitude,
+            };
+            alert(`Current Location: Latitude: ${currentLocation.lat}, Longitude: ${currentLocation.lng}`);
+            map.setView([currentLocation.lat, currentLocation.lng], 18);
+          },
+          () => {
+            alert('Unable to fetch your location.');
+          }
+        );
+      } else {
+        alert('Geolocation is not supported by your browser.');
+      }
+    });
+
+    // Handle Pin Button
+    document.getElementById('pinBtn').addEventListener('click', () => {
+      // If no location is read, get the map center
+      let locationToPin = currentLocation || map.getCenter();
+      const marker = L.marker([locationToPin.lat, locationToPin.lng]).addTo(map);
+      markers.push(marker);
+    });
+
+    // Handle Clear Button
+    document.getElementById('clearBtn').addEventListener('click', () => {
+      markers.forEach((marker) => map.removeLayer(marker));
+      markers = [];
+    });
+
+    // Handle Send Button
+    document.getElementById('sendBtn').addEventListener('click', () => {
+      const formModal = new bootstrap.Modal(document.getElementById('formModal'));
+      formModal.show();
+    });
   </script>
 </body>
 </html>
